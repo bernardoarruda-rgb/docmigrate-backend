@@ -8,23 +8,24 @@ public class SpaceConfiguration : IEntityTypeConfiguration<Space>
 {
     public void Configure(EntityTypeBuilder<Space> builder)
     {
-        builder.ToTable("spaces");
+        builder.ToTable("espacos");
 
-        builder.HasKey(e => e.Id);
-        builder.Property(e => e.Id).HasColumnName("id");
+        builder.HasKey(e => e.Id).HasName("pk_espacos");
+        builder.Property(e => e.Id).HasColumnName("espacosid");
 
-        builder.Property(e => e.Title).HasColumnName("title").HasMaxLength(255).IsRequired();
-        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(500);
+        builder.Property(e => e.Title).HasColumnName("titulo").HasMaxLength(255).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("descricao").HasMaxLength(500);
 
-        builder.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("NOW()");
-        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
-        builder.Property(e => e.DeletedAt).HasColumnName("deleted_at");
+        builder.Property(e => e.CreatedAt).HasColumnName("criadoem").HasColumnType("timestamptz").HasDefaultValueSql("NOW()");
+        builder.Property(e => e.UpdatedAt).HasColumnName("atualizadoem").HasColumnType("timestamptz").HasDefaultValueSql("NOW()");
+        builder.Property(e => e.DeletedAt).HasColumnName("desativadoem").HasColumnType("timestamptz");
 
-        builder.HasIndex(e => e.DeletedAt).HasFilter("deleted_at IS NULL");
+        builder.HasIndex(e => e.DeletedAt).HasFilter("desativadoem IS NULL").HasDatabaseName("idx_espacos_desativadoem");
 
         builder.HasMany(e => e.Sections)
             .WithOne(s => s.Space)
             .HasForeignKey(s => s.SpaceId)
+            .HasConstraintName("fk_secoes_espacoid")
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
