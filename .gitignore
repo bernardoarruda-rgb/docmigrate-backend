@@ -1,0 +1,41 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.csproj.user
+
+## Build
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+## NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+## Rider / VS Code
+.idea/
+.vscode/
+*.swp
+
+## Environment
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Logs
+*.log
+logs/

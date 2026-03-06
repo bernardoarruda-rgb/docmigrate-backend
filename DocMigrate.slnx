@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DocMigrate.API/DocMigrate.API.csproj" />
+    <Project Path="src/DocMigrate.Application/DocMigrate.Application.csproj" />
+    <Project Path="src/DocMigrate.Domain/DocMigrate.Domain.csproj" />
+    <Project Path="src/DocMigrate.Infrastructure/DocMigrate.Infrastructure.csproj" />
+  </Folder>
+</Solution>
