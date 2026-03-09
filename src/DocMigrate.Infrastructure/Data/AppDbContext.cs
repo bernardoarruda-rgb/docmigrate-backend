@@ -6,7 +6,6 @@ namespace DocMigrate.Infrastructure.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<Space> Spaces => Set<Space>();
-    public DbSet<Section> Sections => Set<Section>();
     public DbSet<Page> Pages => Set<Page>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

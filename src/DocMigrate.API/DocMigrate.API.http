@@ -1,6 +1,94 @@
-@DocMigrate.API_HostAddress = http://localhost:5029
+@host = http://localhost:5029
 
-GET {{DocMigrate.API_HostAddress}}/weatherforecast/
+### ========== HEALTH ==========
+
+GET {{host}}/api/health
 Accept: application/json
 
-###
+### ========== SPACES ==========
+
+### Listar todos os espacos
+GET {{host}}/api/spaces
+Accept: application/json
+
+### Criar espaco
+POST {{host}}/api/spaces
+Content-Type: application/json
+
+{
+  "title": "Espaco de Teste",
+  "description": "Descricao do espaco de teste"
+}
+
+### Buscar espaco por ID
+GET {{host}}/api/spaces/1
+Accept: application/json
+
+### Atualizar espaco
+PUT {{host}}/api/spaces/1
+Content-Type: application/json
+
+{
+  "title": "Espaco Atualizado",
+  "description": "Descricao atualizada"
+}
+
+### Deletar espaco (soft delete)
+DELETE {{host}}/api/spaces/1
+
+### ========== PAGES ==========
+
+### Listar paginas de um espaco
+GET {{host}}/api/pages?spaceId=1
+Accept: application/json
+
+### Criar pagina
+POST {{host}}/api/pages
+Content-Type: application/json
+
+{
+  "title": "Pagina de Teste",
+  "description": "Descricao da pagina",
+  "content": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Hello World\"}]}]}",
+  "sortOrder": 0,
+  "spaceId": 1
+}
+
+### Buscar pagina por ID
+GET {{host}}/api/pages/1
+Accept: application/json
+
+### Atualizar pagina
+PUT {{host}}/api/pages/1
+Content-Type: application/json
+
+{
+  "title": "Pagina Atualizada",
+  "description": "Descricao atualizada",
+  "content": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Conteudo atualizado\"}]}]}",
+  "sortOrder": 1
+}
+
+### Deletar pagina (soft delete)
+DELETE {{host}}/api/pages/1
+
+### Criar pagina com espaco inexistente (deve retornar 404)
+POST {{host}}/api/pages
+Content-Type: application/json
+
+{
+  "title": "Pagina Invalida",
+  "sortOrder": 0,
+  "spaceId": 9999
+}
+
+### ========== TESTES DE VALIDACAO ==========
+
+### Criar espaco sem titulo (deve retornar 400)
+POST {{host}}/api/spaces
+Content-Type: application/json
+
+{
+  "title": "",
+  "description": "Sem titulo"
+}

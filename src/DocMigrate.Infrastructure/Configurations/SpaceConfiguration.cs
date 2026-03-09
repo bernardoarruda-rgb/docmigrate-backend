@@ -22,10 +22,10 @@ public class SpaceConfiguration : IEntityTypeConfiguration<Space>
 
         builder.HasIndex(e => e.DeletedAt).HasFilter("desativadoem IS NULL").HasDatabaseName("idx_espacos_desativadoem");
 
-        builder.HasMany(e => e.Sections)
-            .WithOne(s => s.Space)
-            .HasForeignKey(s => s.SpaceId)
-            .HasConstraintName("fk_secoes_espacoid")
+        builder.HasMany(e => e.Pages)
+            .WithOne(p => p.Space)
+            .HasForeignKey(p => p.SpaceId)
+            .HasConstraintName("fk_paginas_espacoid")
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -4,5 +4,6 @@
     <Project Path="src/DocMigrate.Application/DocMigrate.Application.csproj" />
     <Project Path="src/DocMigrate.Domain/DocMigrate.Domain.csproj" />
     <Project Path="src/DocMigrate.Infrastructure/DocMigrate.Infrastructure.csproj" />
+    <Project Path="src/DocMigrate.Tests/DocMigrate.Tests.csproj" />
   </Folder>
 </Solution>

@@ -7,5 +7,5 @@ public class Space : BaseEntity
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
 
-    public ICollection<Section> Sections { get; set; } = [];
+    public ICollection<Page> Pages { get; set; } = [];
 }

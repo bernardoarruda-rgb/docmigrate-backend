@@ -1,14 +1,13 @@
-using DocMigrate.Domain.Common;
+namespace DocMigrate.Application.DTOs.Page;
 
-namespace DocMigrate.Domain.Entities;
-
-public class Page : BaseEntity
+public class PageResponse
 {
+    public int Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Content { get; set; }
     public int SortOrder { get; set; }
-
     public int SpaceId { get; set; }
-    public Space Space { get; set; } = null!;
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
