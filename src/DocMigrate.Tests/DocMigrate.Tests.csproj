@@ -22,6 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DocMigrate.API\DocMigrate.API.csproj" />
     <ProjectReference Include="..\DocMigrate.Application\DocMigrate.Application.csproj" />
     <ProjectReference Include="..\DocMigrate.Infrastructure\DocMigrate.Infrastructure.csproj" />
   </ItemGroup>

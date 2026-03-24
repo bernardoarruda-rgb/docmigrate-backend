@@ -7,6 +7,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Space> Spaces => Set<Space>();
     public DbSet<Page> Pages => Set<Page>();
+    public DbSet<Template> Templates => Set<Template>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+    public DbSet<PageVersion> PageVersions => Set<PageVersion>();
+    public DbSet<PageFavorite> PageFavorites => Set<PageFavorite>();
+    public DbSet<PageVisit> PageVisits => Set<PageVisit>();
+    public DbSet<PageComment> PageComments => Set<PageComment>();
+    public DbSet<PageTranslation> PageTranslations => Set<PageTranslation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
