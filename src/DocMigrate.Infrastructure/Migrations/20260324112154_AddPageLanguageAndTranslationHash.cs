@@ -30,7 +30,7 @@ namespace DocMigrate.Infrastructure.Migrations
             migrationBuilder.Sql(@"
                 UPDATE paginas_traducoes pt
                 SET hashorigem = encode(sha256(
-                  (COALESCE(p.titulo, '') || '|' || COALESCE(p.descricao, '') || '|' || COALESCE(p.conteudo, ''))::bytea
+                  (COALESCE(p.titulo, '') || '|' || COALESCE(p.descricao, '') || '|' || COALESCE(p.conteudo::text, ''))::bytea
                 ), 'hex')
                 FROM paginas p
                 WHERE pt.paginaid = p.paginasid

@@ -17,4 +17,5 @@ public interface IPageService
     Task AutosaveContentAsync(int pageId, string lockUserId, string content, int? userId = null);
     Task SetTagsAsync(int pageId, List<int> tagIds);
     Task<List<HeadingDto>> GetHeadingsAsync(int pageId);
+    Task<List<BreadcrumbItem>> GetBreadcrumbsAsync(int pageId);
 }

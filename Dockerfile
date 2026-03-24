@@ -22,7 +22,6 @@ COPY . .
 # Publish release build
 RUN dotnet publish src/DocMigrate.API/DocMigrate.API.csproj \
     --configuration Release \
-    --no-restore \
     --output /app/publish
 
 # =============================================================================

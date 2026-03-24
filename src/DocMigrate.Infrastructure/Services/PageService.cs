@@ -30,6 +30,9 @@ public class PageService(
                 Description = p.Description,
                 SortOrder = p.SortOrder,
                 SpaceId = p.SpaceId,
+                ParentPageId = p.ParentPageId,
+                Level = p.Level,
+                HasChildren = p.ChildPages.Any(c => c.DeletedAt == null),
                 Icon = p.Icon,
                 IconColor = p.IconColor,
                 BackgroundColor = p.BackgroundColor,
@@ -58,6 +61,9 @@ public class PageService(
                 Description = p.Description,
                 SortOrder = p.SortOrder,
                 SpaceId = p.SpaceId,
+                ParentPageId = p.ParentPageId,
+                Level = p.Level,
+                HasChildren = p.ChildPages.Any(c => c.DeletedAt == null),
                 Icon = p.Icon,
                 IconColor = p.IconColor,
                 BackgroundColor = p.BackgroundColor,
@@ -85,7 +91,9 @@ public class PageService(
             .FirstOrDefaultAsync(p => p.Id == id)
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
-        return MapToResponse(entity);
+        var response = MapToResponse(entity);
+        response.Breadcrumbs = await GetBreadcrumbsAsync(id);
+        return response;
     }
 
     public async Task<PageResponse> CreateAsync(CreatePageRequest request, int? userId = null)
@@ -97,6 +105,24 @@ public class PageService(
         if (!spaceExists)
             throw new KeyNotFoundException("Espaco nao encontrado");
 
+        int level = 1;
+        if (request.ParentPageId.HasValue)
+        {
+            var parent = await context.Pages
+                .Where(p => p.DeletedAt == null && p.Id == request.ParentPageId.Value)
+                .Select(p => new { p.SpaceId, p.Level })
+                .FirstOrDefaultAsync()
+                ?? throw new KeyNotFoundException("Pagina pai nao encontrada ou foi desativada.");
+
+            if (parent.SpaceId != request.SpaceId)
+                throw new InvalidOperationException("Pagina pai deve pertencer ao mesmo espaco.");
+
+            if (parent.Level >= 5)
+                throw new InvalidOperationException("Profundidade maxima (5 niveis) atingida.");
+
+            level = parent.Level + 1;
+        }
+
         var entity = new Page
         {
             Title = request.Title,
@@ -104,6 +130,8 @@ public class PageService(
             Content = request.Content,
             SortOrder = request.SortOrder,
             SpaceId = request.SpaceId,
+            ParentPageId = request.ParentPageId,
+            Level = level,
             Icon = request.Icon,
             IconColor = request.IconColor,
             BackgroundColor = request.BackgroundColor,
@@ -141,6 +169,44 @@ public class PageService(
             .Where(p => p.DeletedAt == null)
             .FirstOrDefaultAsync(p => p.Id == id)
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
+
+        // Handle parent change (move page)
+        if (request.ParentPageId != entity.ParentPageId)
+        {
+            if (request.ParentPageId.HasValue)
+            {
+                if (request.ParentPageId.Value == id)
+                    throw new InvalidOperationException("Uma pagina nao pode ser pai de si mesma.");
+
+                var newParent = await context.Pages
+                    .Where(p => p.DeletedAt == null && p.Id == request.ParentPageId.Value)
+                    .Select(p => new { p.SpaceId, p.Level })
+                    .FirstOrDefaultAsync()
+                    ?? throw new KeyNotFoundException("Pagina pai nao encontrada ou foi desativada.");
+
+                if (newParent.SpaceId != entity.SpaceId)
+                    throw new InvalidOperationException("Pagina pai deve pertencer ao mesmo espaco.");
+
+                if (newParent.Level >= 5)
+                    throw new InvalidOperationException("Profundidade maxima (5 niveis) atingida.");
+
+                // Cycle detection: ensure new parent is not a descendant
+                if (await IsDescendantAsync(id, request.ParentPageId.Value))
+                    throw new InvalidOperationException("Nao e possivel mover a pagina para um descendente (ciclo detectado).");
+
+                entity.ParentPageId = request.ParentPageId;
+                entity.Level = newParent.Level + 1;
+
+                // Recalculate descendant levels
+                await RecalculateDescendantLevelsAsync(entity.Id, entity.Level);
+            }
+            else
+            {
+                entity.ParentPageId = null;
+                entity.Level = 1;
+                await RecalculateDescendantLevelsAsync(entity.Id, 1);
+            }
+        }
 
         entity.Title = request.Title;
         entity.Description = request.Description;
@@ -181,9 +247,26 @@ public class PageService(
             .FirstOrDefaultAsync(p => p.Id == id)
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
-        entity.DeletedAt = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+        entity.DeletedAt = now;
+
+        // Cascade soft-delete all descendants
+        var descendantIds = await GetDescendantIdsAsync(id);
+        if (descendantIds.Count > 0)
+        {
+            var descendants = await context.Pages
+                .Where(p => descendantIds.Contains(p.Id) && p.DeletedAt == null)
+                .ToListAsync();
+            foreach (var desc in descendants)
+                desc.DeletedAt = now;
+        }
+
         await context.SaveChangesAsync();
+
+        // Soft delete translations for this page and all descendants
         await pageTranslationService.SoftDeleteByPageAsync(id);
+        foreach (var descId in descendantIds)
+            await pageTranslationService.SoftDeleteByPageAsync(descId);
     }
 
     public async Task ReorderAsync(int spaceId, ReorderPagesRequest request)
@@ -203,6 +286,11 @@ public class PageService(
 
         if (pages.Count != pageIds.Count)
             throw new ArgumentException("Uma ou mais paginas nao pertencem a este espaco ou nao existem");
+
+        // Validate all pages share the same parent (reorder only within siblings)
+        var parentIds = pages.Select(p => p.ParentPageId).Distinct().ToList();
+        if (parentIds.Count > 1)
+            throw new ArgumentException("Todas as paginas devem pertencer ao mesmo pai para reordenar.");
 
         foreach (var item in request.Items)
         {
@@ -321,6 +409,88 @@ public class PageService(
         await context.SaveChangesAsync();
     }
 
+    private async Task<bool> IsDescendantAsync(int ancestorId, int potentialDescendantId)
+    {
+        var ancestorChain = await context.Pages
+            .AsNoTracking()
+            .Where(p => p.DeletedAt == null)
+            .Select(p => new { p.Id, p.ParentPageId })
+            .ToListAsync();
+
+        var lookup = ancestorChain.ToDictionary(p => p.Id, p => p.ParentPageId);
+        var currentId = (int?)potentialDescendantId;
+        var visited = new HashSet<int>();
+
+        while (currentId.HasValue)
+        {
+            if (!visited.Add(currentId.Value)) return false;
+            if (currentId.Value == ancestorId) return true;
+            lookup.TryGetValue(currentId.Value, out currentId);
+        }
+
+        return false;
+    }
+
+    private async Task<List<int>> GetDescendantIdsAsync(int pageId)
+    {
+        var allPages = await context.Pages
+            .AsNoTracking()
+            .Where(p => p.DeletedAt == null)
+            .Select(p => new { p.Id, p.ParentPageId })
+            .ToListAsync();
+
+        var childrenLookup = allPages
+            .Where(p => p.ParentPageId.HasValue)
+            .GroupBy(p => p.ParentPageId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.Id).ToList());
+
+        var descendants = new List<int>();
+        var queue = new Queue<int>();
+        queue.Enqueue(pageId);
+
+        while (queue.Count > 0)
+        {
+            var currentId = queue.Dequeue();
+            if (!childrenLookup.TryGetValue(currentId, out var childIds)) continue;
+            foreach (var childId in childIds)
+            {
+                descendants.Add(childId);
+                queue.Enqueue(childId);
+            }
+        }
+
+        return descendants;
+    }
+
+    private async Task RecalculateDescendantLevelsAsync(int pageId, int newParentLevel)
+    {
+        var descendantIds = await GetDescendantIdsAsync(pageId);
+        if (descendantIds.Count == 0) return;
+
+        var descendants = await context.Pages
+            .Where(p => descendantIds.Contains(p.Id))
+            .ToListAsync();
+
+        var childrenLookup = descendants
+            .Where(p => p.ParentPageId.HasValue)
+            .GroupBy(p => p.ParentPageId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var queue = new Queue<(int Id, int Level)>();
+        queue.Enqueue((pageId, newParentLevel));
+
+        while (queue.Count > 0)
+        {
+            var (currentId, currentLevel) = queue.Dequeue();
+            if (!childrenLookup.TryGetValue(currentId, out var children)) continue;
+            foreach (var child in children)
+            {
+                child.Level = currentLevel + 1;
+                queue.Enqueue((child.Id, child.Level));
+            }
+        }
+    }
+
     private static PageResponse MapToResponse(Page entity) => new()
     {
         Id = entity.Id,
@@ -329,6 +499,8 @@ public class PageService(
         Content = entity.Content,
         SortOrder = entity.SortOrder,
         SpaceId = entity.SpaceId,
+        ParentPageId = entity.ParentPageId,
+        Level = entity.Level,
         Icon = entity.Icon,
         IconColor = entity.IconColor,
         BackgroundColor = entity.BackgroundColor,
@@ -350,6 +522,31 @@ public class PageService(
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
         return ExtractHeadings(entity.Content);
+    }
+
+    public async Task<List<BreadcrumbItem>> GetBreadcrumbsAsync(int pageId)
+    {
+        var breadcrumbs = new List<BreadcrumbItem>();
+        var currentId = (int?)pageId;
+        var visited = new HashSet<int>();
+
+        while (currentId.HasValue)
+        {
+            if (!visited.Add(currentId.Value)) break;
+
+            var page = await context.Pages
+                .AsNoTracking()
+                .Where(p => p.Id == currentId.Value && p.DeletedAt == null)
+                .Select(p => new { p.Id, p.Title, p.ParentPageId })
+                .FirstOrDefaultAsync();
+
+            if (page == null) break;
+
+            breadcrumbs.Insert(0, new BreadcrumbItem { Id = page.Id, Title = page.Title });
+            currentId = page.ParentPageId;
+        }
+
+        return breadcrumbs;
     }
 
     private static List<HeadingDto> ExtractHeadings(string? tiptapJson)

@@ -64,13 +64,16 @@ public class UserActivityService(AppDbContext context) : IUserActivityService
 
     public async Task<List<RecentPageItem>> GetRecentPagesAsync(int userId, int limit = 10)
     {
+        var latestVisitIds = context.PageVisits
+            .Where(v => v.UserId == userId)
+            .GroupBy(v => v.PageId)
+            .Select(g => g.Max(v => v.Id));
+
         return await context.PageVisits
             .AsNoTracking()
             .Include(v => v.Page)
                 .ThenInclude(p => p.Space)
-            .Where(v => v.UserId == userId && v.Page.DeletedAt == null)
-            .GroupBy(v => v.PageId)
-            .Select(g => g.OrderByDescending(v => v.VisitedAt).First())
+            .Where(v => latestVisitIds.Contains(v.Id) && v.Page.DeletedAt == null)
             .OrderByDescending(v => v.VisitedAt)
             .Take(limit)
             .Select(v => new RecentPageItem

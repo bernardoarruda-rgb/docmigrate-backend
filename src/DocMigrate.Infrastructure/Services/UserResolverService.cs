@@ -45,7 +45,21 @@ public class UserResolverService(AppDbContext context) : IUserResolverService
         };
 
         context.Users.Add(user);
-        await context.SaveChangesAsync();
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Race condition: another request already created this user
+            context.Entry(user).State = EntityState.Detached;
+            user = await context.Users
+                .FirstOrDefaultAsync(u => u.KeycloakId == keycloakId && u.DeletedAt == null);
+
+            if (user is null)
+                throw;
+        }
 
         return user;
     }

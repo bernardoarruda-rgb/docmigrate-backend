@@ -51,7 +51,7 @@ public class PageServiceTests
         Title = "Espaco Teste",
     };
 
-    private static Page CreatePage(int id, int spaceId = 1, int sortOrder = 0, string? content = null) => new()
+    private static Page CreatePage(int id, int spaceId = 1, int sortOrder = 0, string? content = null, int? parentPageId = null, int level = 1) => new()
     {
         Id = id,
         Title = $"Pagina {id}",
@@ -59,6 +59,8 @@ public class PageServiceTests
         Content = content ?? $"Conteudo {id}",
         SortOrder = sortOrder,
         SpaceId = spaceId,
+        ParentPageId = parentPageId,
+        Level = level,
     };
 
     private static async Task SeedBaseEntities(AppDbContext context, int spaceId = 1)
@@ -827,6 +829,227 @@ public class PageServiceTests
         var result = await service.GetHeadingsAsync(1);
 
         result.Should().BeEmpty();
+    }
+
+    #endregion
+
+    #region Hierarchy
+
+    [Fact]
+    public async Task CreateAsync_WithValidParent_SetsLevelCorrectly()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_WithValidParent_SetsLevelCorrectly));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_WithValidParent_SetsLevelCorrectly));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var result = await service.CreateAsync(new CreatePageRequest
+        {
+            Title = "Sub-pagina", SpaceId = 1, SortOrder = 0, ParentPageId = 1,
+        });
+
+        result.Level.Should().Be(2);
+        result.ParentPageId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ExceedsMaxDepth_Throws()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_ExceedsMaxDepth_Throws));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1, level: 5));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_ExceedsMaxDepth_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var act = () => service.CreateAsync(new CreatePageRequest
+        {
+            Title = "Nivel 6", SpaceId = 1, SortOrder = 0, ParentPageId = 1,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*5 niveis*");
+    }
+
+    [Fact]
+    public async Task CreateAsync_ParentInDifferentSpace_Throws()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_ParentInDifferentSpace_Throws));
+        await SeedBaseEntities(context);
+        context.Spaces.Add(CreateSpace(2));
+        context.Pages.Add(CreatePage(1, spaceId: 2));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_ParentInDifferentSpace_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var act = () => service.CreateAsync(new CreatePageRequest
+        {
+            Title = "Wrong space", SpaceId = 1, SortOrder = 0, ParentPageId = 1,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*mesmo espaco*");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithChildren_CascadeSoftDeletes()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(DeleteAsync_WithChildren_CascadeSoftDeletes));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
+        context.Pages.Add(CreatePage(3, parentPageId: 2, level: 3));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(DeleteAsync_WithChildren_CascadeSoftDeletes));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        await service.DeleteAsync(1);
+
+        await using var checkContext = TestDbContextFactory.Create(nameof(DeleteAsync_WithChildren_CascadeSoftDeletes));
+        var allPages = await checkContext.Pages.IgnoreQueryFilters().ToListAsync();
+        allPages.Should().AllSatisfy(p => p.DeletedAt.Should().NotBeNull());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_MoveToDescendant_Throws()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToDescendant_Throws));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToDescendant_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var act = () => service.UpdateAsync(1, new UpdatePageRequest
+        {
+            Title = "Pagina 1", SortOrder = 0, ParentPageId = 2,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*ciclo*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SelfParent_Throws()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_SelfParent_Throws));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_SelfParent_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var act = () => service.UpdateAsync(1, new UpdatePageRequest
+        {
+            Title = "Pagina 1", SortOrder = 0, ParentPageId = 1,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*pai de si mesma*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
+        context.Pages.Add(CreatePage(3, parentPageId: 2, level: 3));
+        context.Pages.Add(CreatePage(4));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        await service.UpdateAsync(2, new UpdatePageRequest
+        {
+            Title = "Pagina 2", SortOrder = 0, ParentPageId = 4,
+        });
+
+        await using var checkContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels));
+        var page2 = await checkContext.Pages.FindAsync(2);
+        var page3 = await checkContext.Pages.FindAsync(3);
+        page2!.Level.Should().Be(2);
+        page3!.Level.Should().Be(3);
+        page2.ParentPageId.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetBreadcrumbsAsync_ReturnsPathFromRootToPage()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(GetBreadcrumbsAsync_ReturnsPathFromRootToPage));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
+        context.Pages.Add(CreatePage(3, parentPageId: 2, level: 3));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(GetBreadcrumbsAsync_ReturnsPathFromRootToPage));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var breadcrumbs = await service.GetBreadcrumbsAsync(3);
+
+        breadcrumbs.Should().HaveCount(3);
+        breadcrumbs[0].Id.Should().Be(1);
+        breadcrumbs[1].Id.Should().Be(2);
+        breadcrumbs[2].Id.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_IncludesHierarchyFields()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(GetAllAsync_IncludesHierarchyFields));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(GetAllAsync_IncludesHierarchyFields));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var pages = await service.GetAllAsync(1);
+
+        var parent = pages.First(p => p.Id == 1);
+        parent.ParentPageId.Should().BeNull();
+        parent.Level.Should().Be(1);
+        parent.HasChildren.Should().BeTrue();
+
+        var child = pages.First(p => p.Id == 2);
+        child.ParentPageId.Should().Be(1);
+        child.Level.Should().Be(2);
+        child.HasChildren.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ReorderAsync_CrossParentPages_Throws()
+    {
+        await using var context = TestDbContextFactory.Create(nameof(ReorderAsync_CrossParentPages_Throws));
+        await SeedBaseEntities(context);
+        context.Pages.Add(CreatePage(1));
+        context.Pages.Add(CreatePage(2));
+        context.Pages.Add(CreatePage(3, parentPageId: 1, level: 2));
+        await context.SaveChangesAsync();
+
+        await using var svcContext = TestDbContextFactory.Create(nameof(ReorderAsync_CrossParentPages_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var act = () => service.ReorderAsync(1, new ReorderPagesRequest
+        {
+            Items = [new() { PageId = 2, SortOrder = 1 }, new() { PageId = 3, SortOrder = 2 }],
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*mesmo pai*");
     }
 
     #endregion

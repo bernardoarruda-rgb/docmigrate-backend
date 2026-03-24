@@ -1,4 +1,5 @@
 using DocMigrate.API.Extensions;
+using Scalar.AspNetCore;
 using DocMigrate.API.Middleware;
 using DocMigrate.Application.Interfaces;
 using DocMigrate.Application.Validators;
@@ -112,6 +113,7 @@ app.UseResponseCompression();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 // CORS (all environments)

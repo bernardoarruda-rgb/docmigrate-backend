@@ -28,4 +28,9 @@ public class Page : BaseEntity
 
     public int SpaceId { get; set; }
     public Space Space { get; set; } = null!;
+
+    public int? ParentPageId { get; set; }
+    public Page? ParentPage { get; set; }
+    public ICollection<Page> ChildPages { get; set; } = [];
+    public int Level { get; set; } = 1;
 }

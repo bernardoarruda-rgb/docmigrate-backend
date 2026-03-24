@@ -10,4 +10,5 @@ public class UpdatePageRequest
     public string? IconColor { get; set; }
     public string? BackgroundColor { get; set; }
     public string? Language { get; set; }
+    public int? ParentPageId { get; set; }
 }

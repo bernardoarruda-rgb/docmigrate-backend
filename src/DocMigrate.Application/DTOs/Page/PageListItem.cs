@@ -7,6 +7,9 @@ public class PageListItem
     public string? Description { get; set; }
     public int SortOrder { get; set; }
     public int SpaceId { get; set; }
+    public int? ParentPageId { get; set; }
+    public int Level { get; set; } = 1;
+    public bool HasChildren { get; set; }
     public string? Icon { get; set; }
     public string? IconColor { get; set; }
     public string? BackgroundColor { get; set; }

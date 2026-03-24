@@ -35,5 +35,9 @@ public class UpdatePageRequestValidator : AbstractValidator<UpdatePageRequest>
         RuleFor(x => x.Language)
             .Must(lang => lang == null || new[] { "pt-BR", "en", "es" }.Contains(lang))
             .WithMessage("Idioma deve ser 'pt-BR', 'en' ou 'es'.");
+
+        RuleFor(x => x.ParentPageId)
+            .GreaterThan(0).When(x => x.ParentPageId.HasValue)
+            .WithMessage("Pagina pai invalida");
     }
 }

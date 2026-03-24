@@ -29,6 +29,18 @@ public class PageConfiguration : IEntityTypeConfiguration<Page>
 
         builder.Property(e => e.SpaceId).HasColumnName("espacoid");
 
+        builder.Property(e => e.ParentPageId).HasColumnName("paginapaiid");
+        builder.Property(e => e.Level).HasColumnName("nivel").HasDefaultValue(1);
+
+        builder.HasOne(e => e.ParentPage)
+            .WithMany(e => e.ChildPages)
+            .HasForeignKey(e => e.ParentPageId)
+            .HasConstraintName("fk_paginas_paginapaiid")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasCheckConstraint("ck_paginas_nivel", "nivel BETWEEN 1 AND 5");
+        builder.HasIndex(e => e.ParentPageId).HasDatabaseName("idx_paginas_paginapaiid");
+
         builder.Property(e => e.CreatedAt).HasColumnName("criadoem").HasColumnType("timestamptz").HasDefaultValueSql("NOW()");
         builder.Property(e => e.UpdatedAt).HasColumnName("atualizadoem").HasColumnType("timestamptz").HasDefaultValueSql("NOW()");
         builder.Property(e => e.DeletedAt).HasColumnName("desativadoem").HasColumnType("timestamptz");

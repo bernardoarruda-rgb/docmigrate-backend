@@ -17,6 +17,10 @@ public class CreatePageRequestValidator : AbstractValidator<CreatePageRequest>
         RuleFor(x => x.SpaceId)
             .GreaterThan(0).WithMessage("Espaco e obrigatorio");
 
+        RuleFor(x => x.ParentPageId)
+            .GreaterThan(0).When(x => x.ParentPageId.HasValue)
+            .WithMessage("Pagina pai invalida");
+
         RuleFor(x => x.SortOrder)
             .GreaterThanOrEqualTo(0).WithMessage("Ordem deve ser maior ou igual a zero");
 

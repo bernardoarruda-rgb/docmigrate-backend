@@ -207,4 +207,17 @@ public class PagesController(IPageService pageService) : AuthenticatedController
             return NotFound(new { message = "Pagina nao encontrada" });
         }
     }
+
+    [HttpGet("{id}/breadcrumbs")]
+    public async Task<ActionResult<List<BreadcrumbItem>>> GetBreadcrumbs(int id)
+    {
+        try
+        {
+            return Ok(await pageService.GetBreadcrumbsAsync(id));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Pagina nao encontrada" });
+        }
+    }
 }
