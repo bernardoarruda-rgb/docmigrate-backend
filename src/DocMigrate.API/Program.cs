@@ -48,18 +48,13 @@ builder.Services.AddScoped<IUserResolverService, UserResolverService>();
 builder.Services.AddScoped<IUserActivityService, UserActivityService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IPageTranslationService, PageTranslationService>();
-var geminiApiKey = builder.Configuration["GeminiTranslation:ApiKey"];
-if (!string.IsNullOrEmpty(geminiApiKey))
-{
-    builder.Services.AddHttpClient("GeminiTranslation");
-    builder.Services.AddSingleton<ITranslationProvider, GeminiTranslationProvider>();
-}
-else
-{
-    builder.Services.AddSingleton<ITranslationProvider, NoOpTranslationProvider>();
-}
+builder.Services.AddScoped<IFolderService, FolderService>();
+builder.Services.AddHttpClient("GeminiTranslation");
+builder.Services.AddSingleton<ITranslationProvider, GeminiTranslationProvider>();
 builder.Services.AddSingleton<TiptapTranslationHelper>();
 builder.Services.AddSingleton<IPlainTextExtractor, TiptapPlainTextExtractor>();
+builder.Services.AddHttpClient("Unsplash");
+builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 
 // Validation
 builder.Services.AddFluentValidationAutoValidation();

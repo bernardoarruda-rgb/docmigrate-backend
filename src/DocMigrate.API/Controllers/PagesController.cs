@@ -16,7 +16,8 @@ public class PagesController(IPageService pageService) : AuthenticatedController
     public async Task<ActionResult<PaginatedResult<PageListItem>>> GetAll(
         [FromQuery] int spaceId,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50)
+        [FromQuery] int pageSize = 50,
+        [FromQuery] int? folderId = null)
     {
         if (spaceId < 1)
             return BadRequest(new { message = "O identificador do espaco deve ser maior ou igual a 1." });
@@ -27,7 +28,7 @@ public class PagesController(IPageService pageService) : AuthenticatedController
         if (pageSize < 1 || pageSize > 100)
             return BadRequest(new { message = "O tamanho da pagina deve estar entre 1 e 100." });
 
-        return Ok(await pageService.GetAllAsync(spaceId, page, pageSize));
+        return Ok(await pageService.GetAllAsync(spaceId, page, pageSize, folderId));
     }
 
     [HttpGet("{id}")]
@@ -208,12 +209,57 @@ public class PagesController(IPageService pageService) : AuthenticatedController
         }
     }
 
-    [HttpGet("{id}/breadcrumbs")]
-    public async Task<ActionResult<List<BreadcrumbItem>>> GetBreadcrumbs(int id)
+    [HttpPatch("{id}/cover")]
+    [Authorize(Policy = "EditorOnly")]
+    public async Task<IActionResult> UpdateCover(int id, UpdatePageCoverRequest request)
     {
         try
         {
-            return Ok(await pageService.GetBreadcrumbsAsync(id));
+            await pageService.UpdateCoverAsync(id, request);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Pagina nao encontrada" });
+        }
+    }
+
+    [HttpPost("{id}/cover")]
+    [Authorize(Policy = "EditorOnly")]
+    public async Task<IActionResult> UploadCover(int id, IFormFile file)
+    {
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { message = "Arquivo excede o limite de 5MB." });
+
+        var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+        if (!allowedTypes.Contains(file.ContentType))
+            return BadRequest(new { message = "Tipo de arquivo nao suportado. Use JPG, PNG ou WebP." });
+
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        var extension = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+        if (string.IsNullOrEmpty(extension) || !allowedExtensions.Contains(extension))
+            return BadRequest(new { message = "Extensao de arquivo nao permitida." });
+
+        try
+        {
+            using var stream = file.OpenReadStream();
+            var url = await pageService.UploadCoverAsync(id, stream, file.FileName, file.ContentType);
+            return Ok(new { url });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Pagina nao encontrada" });
+        }
+    }
+
+    [HttpPatch("{id}/width")]
+    [Authorize(Policy = "EditorOnly")]
+    public async Task<IActionResult> UpdateWidth(int id, UpdatePageWidthRequest request)
+    {
+        try
+        {
+            await pageService.UpdateWidthAsync(id, request);
+            return NoContent();
         }
         catch (KeyNotFoundException)
         {

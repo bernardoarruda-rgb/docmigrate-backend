@@ -16,6 +16,7 @@ namespace DocMigrate.Tests;
 public class PageServiceTests
 {
     private static readonly IPlainTextExtractor StubExtractor = new StubPlainTextExtractor();
+    private static readonly IFileService StubFileService = new Mock<IFileService>().Object;
     private static readonly IPageTranslationService StubTranslationService = new StubPageTranslationService();
     private static readonly Mock<IServiceScopeFactory> StubScopeFactory = new();
     private static readonly ILogger<PageService> StubLogger = new Mock<ILogger<PageService>>().Object;
@@ -51,7 +52,7 @@ public class PageServiceTests
         Title = "Espaco Teste",
     };
 
-    private static Page CreatePage(int id, int spaceId = 1, int sortOrder = 0, string? content = null, int? parentPageId = null, int level = 1) => new()
+    private static Page CreatePage(int id, int spaceId = 1, int sortOrder = 0, string? content = null, int? folderId = null) => new()
     {
         Id = id,
         Title = $"Pagina {id}",
@@ -59,8 +60,15 @@ public class PageServiceTests
         Content = content ?? $"Conteudo {id}",
         SortOrder = sortOrder,
         SpaceId = spaceId,
-        ParentPageId = parentPageId,
-        Level = level,
+        FolderId = folderId,
+    };
+
+    private static Folder CreateFolder(int id, int spaceId = 1, int? parentFolderId = null) => new()
+    {
+        Id = id,
+        Title = $"Pasta {id}",
+        SpaceId = spaceId,
+        ParentFolderId = parentFolderId,
     };
 
     private static async Task SeedBaseEntities(AppDbContext context, int spaceId = 1)
@@ -79,7 +87,7 @@ public class PageServiceTests
         await SeedBaseEntities(context);
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetAllAsync_SpaceHasNoPages_ReturnsEmptyList));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetAllAsync(spaceId: 1);
 
@@ -100,7 +108,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetAllAsync_WithPages_ReturnsPagesForSpace));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetAllAsync(spaceId: 1);
 
@@ -119,7 +127,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetAllAsync_ExcludesDeletedPages));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetAllAsync(spaceId: 1);
 
@@ -138,7 +146,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetAllAsync_OrdersBySortOrder));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetAllAsync(spaceId: 1);
 
@@ -157,7 +165,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetAllAsync_DoesNotIncludeContent));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetAllAsync(spaceId: 1);
 
@@ -180,7 +188,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetByIdAsync_ExistingPage_ReturnsPageWithContent));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetByIdAsync(1);
 
@@ -195,7 +203,7 @@ public class PageServiceTests
     public async Task GetByIdAsync_NonExistingPage_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(GetByIdAsync_NonExistingPage_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.GetByIdAsync(999);
 
@@ -214,7 +222,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create(nameof(GetByIdAsync_DeletedPage_ThrowsKeyNotFoundException));
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.GetByIdAsync(1);
 
@@ -232,7 +240,7 @@ public class PageServiceTests
         await using var context = TestDbContextFactory.Create(nameof(CreateAsync_ValidRequest_CreatesAndReturnsPage));
         await SeedBaseEntities(context);
 
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
         var request = new CreatePageRequest
         {
             Title = "Nova Pagina",
@@ -262,7 +270,7 @@ public class PageServiceTests
     public async Task CreateAsync_NonExistingSpace_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(CreateAsync_NonExistingSpace_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
         var request = new CreatePageRequest
         {
             Title = "Pagina Orfao",
@@ -284,7 +292,7 @@ public class PageServiceTests
         context.Spaces.Add(space);
         await context.SaveChangesAsync();
 
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
         var request = new CreatePageRequest
         {
             Title = "Pagina em Espaco Deletado",
@@ -310,7 +318,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var updateContext = TestDbContextFactory.Create(nameof(UpdateAsync_ExistingPage_UpdatesAllFields));
-        var service = new PageService(updateContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(updateContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
         var request = new UpdatePageRequest
         {
             Title = "Titulo Atualizado",
@@ -339,7 +347,7 @@ public class PageServiceTests
     public async Task UpdateAsync_NonExistingPage_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_NonExistingPage_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
         var request = new UpdatePageRequest
         {
             Title = "Titulo",
@@ -364,7 +372,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var deleteContext = TestDbContextFactory.Create(nameof(DeleteAsync_ExistingPage_SoftDeletes));
-        var service = new PageService(deleteContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(deleteContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         await service.DeleteAsync(1);
 
@@ -379,7 +387,7 @@ public class PageServiceTests
     public async Task DeleteAsync_NonExistingPage_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(DeleteAsync_NonExistingPage_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.DeleteAsync(999);
 
@@ -400,7 +408,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var lockContext = TestDbContextFactory.Create(nameof(AcquireLockAsync_UnlockedPage_ReturnsTrue));
-        var service = new PageService(lockContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(lockContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.AcquireLockAsync(1, "user-abc");
 
@@ -425,7 +433,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var lockContext = TestDbContextFactory.Create(nameof(AcquireLockAsync_SameUser_ReturnsTrue));
-        var service = new PageService(lockContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(lockContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.AcquireLockAsync(1, "user-abc");
 
@@ -449,7 +457,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var lockContext = TestDbContextFactory.Create(nameof(AcquireLockAsync_DifferentUserActiveLock_ReturnsFalse));
-        var service = new PageService(lockContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(lockContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.AcquireLockAsync(1, "user-xyz");
 
@@ -472,7 +480,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var lockContext = TestDbContextFactory.Create(nameof(AcquireLockAsync_ExpiredLock_ReturnsTrue));
-        var service = new PageService(lockContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(lockContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.AcquireLockAsync(1, "user-xyz");
 
@@ -488,7 +496,7 @@ public class PageServiceTests
     public async Task AcquireLockAsync_NonExistentPage_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(AcquireLockAsync_NonExistentPage_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.AcquireLockAsync(999, "user-abc");
 
@@ -507,7 +515,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var lockContext = TestDbContextFactory.Create(nameof(AcquireLockAsync_SoftDeletedPage_ThrowsKeyNotFoundException));
-        var service = new PageService(lockContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(lockContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.AcquireLockAsync(1, "user-abc");
 
@@ -531,7 +539,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var releaseContext = TestDbContextFactory.Create(nameof(ReleaseLockAsync_LockedBySameUser_ReturnsTrue));
-        var service = new PageService(releaseContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(releaseContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.ReleaseLockAsync(1, "user-abc");
 
@@ -555,7 +563,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var releaseContext = TestDbContextFactory.Create(nameof(ReleaseLockAsync_LockedByDifferentUser_ReturnsFalse));
-        var service = new PageService(releaseContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(releaseContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.ReleaseLockAsync(1, "user-xyz");
 
@@ -575,7 +583,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var releaseContext = TestDbContextFactory.Create(nameof(ReleaseLockAsync_UnlockedPage_ReturnsFalse));
-        var service = new PageService(releaseContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(releaseContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.ReleaseLockAsync(1, "user-abc");
 
@@ -586,7 +594,7 @@ public class PageServiceTests
     public async Task ReleaseLockAsync_NonExistentPage_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(ReleaseLockAsync_NonExistentPage_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.ReleaseLockAsync(999, "user-abc");
 
@@ -610,7 +618,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var saveContext = TestDbContextFactory.Create(nameof(AutosaveContentAsync_LockedBySameUser_UpdatesContentAndRenewsLock));
-        var service = new PageService(saveContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(saveContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         await service.AutosaveContentAsync(1, "user-abc", "{\"type\":\"doc\",\"content\":[]}");
 
@@ -634,7 +642,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var saveContext = TestDbContextFactory.Create(nameof(AutosaveContentAsync_LockedByDifferentUser_ThrowsInvalidOperationException));
-        var service = new PageService(saveContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(saveContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.AutosaveContentAsync(1, "user-xyz", "novo conteudo");
 
@@ -651,7 +659,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var saveContext = TestDbContextFactory.Create(nameof(AutosaveContentAsync_UnlockedPage_ThrowsInvalidOperationException));
-        var service = new PageService(saveContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(saveContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.AutosaveContentAsync(1, "user-abc", "novo conteudo");
 
@@ -663,7 +671,7 @@ public class PageServiceTests
     public async Task AutosaveContentAsync_NonExistentPage_ThrowsKeyNotFoundException()
     {
         await using var context = TestDbContextFactory.Create(nameof(AutosaveContentAsync_NonExistentPage_ThrowsKeyNotFoundException));
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.AutosaveContentAsync(999, "user-abc", "conteudo");
 
@@ -682,7 +690,7 @@ public class PageServiceTests
         await SeedBaseEntities(context);
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(CreateAsync_WithUserId_SetsCreatedByAndUpdatedBy)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.CreateAsync(new CreatePageRequest
         {
@@ -709,7 +717,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(UpdateAsync_WithUserId_OnlyUpdatesUpdatedBy)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         await service.UpdateAsync(1, new UpdatePageRequest
         {
@@ -729,7 +737,7 @@ public class PageServiceTests
         await SeedBaseEntities(context);
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(CreateAsync_WithoutUserId_LeavesAuthorshipNull)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.CreateAsync(new CreatePageRequest
         {
@@ -756,7 +764,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(GetHeadingsAsync_PageWithHeadings_ReturnsHeadingsWithSlugs)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetHeadingsAsync(1);
 
@@ -778,7 +786,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(GetHeadingsAsync_DuplicateHeadings_DeduplicatesSlugs)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetHeadingsAsync(1);
 
@@ -797,7 +805,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(GetHeadingsAsync_NoContent_ReturnsEmptyList)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetHeadingsAsync(1);
 
@@ -808,7 +816,7 @@ public class PageServiceTests
     public async Task GetHeadingsAsync_NonExistentPage_ThrowsKeyNotFound()
     {
         await using var context = TestDbContextFactory.Create($"Page_{nameof(GetHeadingsAsync_NonExistentPage_ThrowsKeyNotFound)}");
-        var service = new PageService(context, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(context, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         Func<Task> act = () => service.GetHeadingsAsync(999);
 
@@ -824,7 +832,7 @@ public class PageServiceTests
         await context.SaveChangesAsync();
 
         await using var readContext = TestDbContextFactory.Create($"Page_{nameof(GetHeadingsAsync_MalformedJson_ReturnsEmptyList)}");
-        var service = new PageService(readContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var service = new PageService(readContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.GetHeadingsAsync(1);
 
@@ -833,63 +841,42 @@ public class PageServiceTests
 
     #endregion
 
-    #region Hierarchy
+    #region Folder
 
     [Fact]
-    public async Task CreateAsync_WithValidParent_SetsLevelCorrectly()
+    public async Task CreateAsync_WithValidFolder_SetsFolderIdCorrectly()
     {
-        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_WithValidParent_SetsLevelCorrectly));
+        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_WithValidFolder_SetsFolderIdCorrectly));
         await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
+        context.Folders.Add(CreateFolder(1, spaceId: 1));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_WithValidParent_SetsLevelCorrectly));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_WithValidFolder_SetsFolderIdCorrectly));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var result = await service.CreateAsync(new CreatePageRequest
         {
-            Title = "Sub-pagina", SpaceId = 1, SortOrder = 0, ParentPageId = 1,
+            Title = "Pagina na pasta", SpaceId = 1, SortOrder = 0, FolderId = 1,
         });
 
-        result.Level.Should().Be(2);
-        result.ParentPageId.Should().Be(1);
+        result.FolderId.Should().Be(1);
     }
 
     [Fact]
-    public async Task CreateAsync_ExceedsMaxDepth_Throws()
+    public async Task CreateAsync_FolderInDifferentSpace_Throws()
     {
-        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_ExceedsMaxDepth_Throws));
-        await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1, level: 5));
-        await context.SaveChangesAsync();
-
-        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_ExceedsMaxDepth_Throws));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
-
-        var act = () => service.CreateAsync(new CreatePageRequest
-        {
-            Title = "Nivel 6", SpaceId = 1, SortOrder = 0, ParentPageId = 1,
-        });
-
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*5 niveis*");
-    }
-
-    [Fact]
-    public async Task CreateAsync_ParentInDifferentSpace_Throws()
-    {
-        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_ParentInDifferentSpace_Throws));
+        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_FolderInDifferentSpace_Throws));
         await SeedBaseEntities(context);
         context.Spaces.Add(CreateSpace(2));
-        context.Pages.Add(CreatePage(1, spaceId: 2));
+        context.Folders.Add(CreateFolder(1, spaceId: 2));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_ParentInDifferentSpace_Throws));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_FolderInDifferentSpace_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var act = () => service.CreateAsync(new CreatePageRequest
         {
-            Title = "Wrong space", SpaceId = 1, SortOrder = 0, ParentPageId = 1,
+            Title = "Pagina errada", SpaceId = 1, SortOrder = 0, FolderId = 1,
         });
 
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -897,159 +884,231 @@ public class PageServiceTests
     }
 
     [Fact]
-    public async Task DeleteAsync_WithChildren_CascadeSoftDeletes()
+    public async Task CreateAsync_FolderNotFound_Throws()
     {
-        await using var context = TestDbContextFactory.Create(nameof(DeleteAsync_WithChildren_CascadeSoftDeletes));
+        await using var context = TestDbContextFactory.Create(nameof(CreateAsync_FolderNotFound_Throws));
         await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
-        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
-        context.Pages.Add(CreatePage(3, parentPageId: 2, level: 3));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(DeleteAsync_WithChildren_CascadeSoftDeletes));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(CreateAsync_FolderNotFound_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
-        await service.DeleteAsync(1);
+        var act = () => service.CreateAsync(new CreatePageRequest
+        {
+            Title = "Pagina sem pasta", SpaceId = 1, SortOrder = 0, FolderId = 999,
+        });
 
-        await using var checkContext = TestDbContextFactory.Create(nameof(DeleteAsync_WithChildren_CascadeSoftDeletes));
-        var allPages = await checkContext.Pages.IgnoreQueryFilters().ToListAsync();
-        allPages.Should().AllSatisfy(p => p.DeletedAt.Should().NotBeNull());
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("*Pasta*");
     }
 
     [Fact]
-    public async Task UpdateAsync_MoveToDescendant_Throws()
+    public async Task UpdateAsync_MoveFolderToDifferentSpace_Throws()
     {
-        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToDescendant_Throws));
+        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_MoveFolderToDifferentSpace_Throws));
         await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
-        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
+        context.Spaces.Add(CreateSpace(2));
+        context.Folders.Add(CreateFolder(1, spaceId: 1));
+        context.Folders.Add(CreateFolder(2, spaceId: 2));
+        context.Pages.Add(CreatePage(1, spaceId: 1, folderId: 1));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToDescendant_Throws));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveFolderToDifferentSpace_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var act = () => service.UpdateAsync(1, new UpdatePageRequest
         {
-            Title = "Pagina 1", SortOrder = 0, ParentPageId = 2,
+            Title = "Pagina 1", SortOrder = 0, FolderId = 2,
         });
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*ciclo*");
+            .WithMessage("*mesmo espaco*");
     }
 
     [Fact]
-    public async Task UpdateAsync_SelfParent_Throws()
+    public async Task UpdateAsync_MoveToValidFolder_UpdatesFolderId()
     {
-        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_SelfParent_Throws));
+        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToValidFolder_UpdatesFolderId));
         await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
+        context.Folders.Add(CreateFolder(1, spaceId: 1));
+        context.Folders.Add(CreateFolder(2, spaceId: 1));
+        context.Pages.Add(CreatePage(1, spaceId: 1, folderId: 1));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_SelfParent_Throws));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToValidFolder_UpdatesFolderId));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
-        var act = () => service.UpdateAsync(1, new UpdatePageRequest
+        await service.UpdateAsync(1, new UpdatePageRequest
         {
-            Title = "Pagina 1", SortOrder = 0, ParentPageId = 1,
+            Title = "Pagina 1", SortOrder = 0, FolderId = 2,
         });
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*pai de si mesma*");
+        await using var checkContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToValidFolder_UpdatesFolderId));
+        var page = await checkContext.Pages.FindAsync(1);
+        page!.FolderId.Should().Be(2);
     }
 
     [Fact]
-    public async Task UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels()
+    public async Task GetAllAsync_IncludesFolderIdField()
     {
-        await using var context = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels));
+        await using var context = TestDbContextFactory.Create(nameof(GetAllAsync_IncludesFolderIdField));
         await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
-        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
-        context.Pages.Add(CreatePage(3, parentPageId: 2, level: 3));
-        context.Pages.Add(CreatePage(4));
+        context.Folders.Add(CreateFolder(1, spaceId: 1));
+        context.Pages.Add(CreatePage(1, folderId: 1));
+        context.Pages.Add(CreatePage(2));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
-
-        await service.UpdateAsync(2, new UpdatePageRequest
-        {
-            Title = "Pagina 2", SortOrder = 0, ParentPageId = 4,
-        });
-
-        await using var checkContext = TestDbContextFactory.Create(nameof(UpdateAsync_MoveToNewParent_RecalculatesDescendantLevels));
-        var page2 = await checkContext.Pages.FindAsync(2);
-        var page3 = await checkContext.Pages.FindAsync(3);
-        page2!.Level.Should().Be(2);
-        page3!.Level.Should().Be(3);
-        page2.ParentPageId.Should().Be(4);
-    }
-
-    [Fact]
-    public async Task GetBreadcrumbsAsync_ReturnsPathFromRootToPage()
-    {
-        await using var context = TestDbContextFactory.Create(nameof(GetBreadcrumbsAsync_ReturnsPathFromRootToPage));
-        await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
-        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
-        context.Pages.Add(CreatePage(3, parentPageId: 2, level: 3));
-        await context.SaveChangesAsync();
-
-        await using var svcContext = TestDbContextFactory.Create(nameof(GetBreadcrumbsAsync_ReturnsPathFromRootToPage));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
-
-        var breadcrumbs = await service.GetBreadcrumbsAsync(3);
-
-        breadcrumbs.Should().HaveCount(3);
-        breadcrumbs[0].Id.Should().Be(1);
-        breadcrumbs[1].Id.Should().Be(2);
-        breadcrumbs[2].Id.Should().Be(3);
-    }
-
-    [Fact]
-    public async Task GetAllAsync_IncludesHierarchyFields()
-    {
-        await using var context = TestDbContextFactory.Create(nameof(GetAllAsync_IncludesHierarchyFields));
-        await SeedBaseEntities(context);
-        context.Pages.Add(CreatePage(1));
-        context.Pages.Add(CreatePage(2, parentPageId: 1, level: 2));
-        await context.SaveChangesAsync();
-
-        await using var svcContext = TestDbContextFactory.Create(nameof(GetAllAsync_IncludesHierarchyFields));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(GetAllAsync_IncludesFolderIdField));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var pages = await service.GetAllAsync(1);
 
-        var parent = pages.First(p => p.Id == 1);
-        parent.ParentPageId.Should().BeNull();
-        parent.Level.Should().Be(1);
-        parent.HasChildren.Should().BeTrue();
-
-        var child = pages.First(p => p.Id == 2);
-        child.ParentPageId.Should().Be(1);
-        child.Level.Should().Be(2);
-        child.HasChildren.Should().BeFalse();
+        pages.First(p => p.Id == 1).FolderId.Should().Be(1);
+        pages.First(p => p.Id == 2).FolderId.Should().BeNull();
     }
 
     [Fact]
-    public async Task ReorderAsync_CrossParentPages_Throws()
+    public async Task ReorderAsync_CrossFolderPages_Throws()
     {
-        await using var context = TestDbContextFactory.Create(nameof(ReorderAsync_CrossParentPages_Throws));
+        await using var context = TestDbContextFactory.Create(nameof(ReorderAsync_CrossFolderPages_Throws));
         await SeedBaseEntities(context);
+        context.Folders.Add(CreateFolder(1, spaceId: 1));
         context.Pages.Add(CreatePage(1));
-        context.Pages.Add(CreatePage(2));
-        context.Pages.Add(CreatePage(3, parentPageId: 1, level: 2));
+        context.Pages.Add(CreatePage(2, folderId: 1));
         await context.SaveChangesAsync();
 
-        await using var svcContext = TestDbContextFactory.Create(nameof(ReorderAsync_CrossParentPages_Throws));
-        var service = new PageService(svcContext, StubExtractor, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        await using var svcContext = TestDbContextFactory.Create(nameof(ReorderAsync_CrossFolderPages_Throws));
+        var service = new PageService(svcContext, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
 
         var act = () => service.ReorderAsync(1, new ReorderPagesRequest
         {
-            Items = [new() { PageId = 2, SortOrder = 1 }, new() { PageId = 3, SortOrder = 2 }],
+            Items = [new() { PageId = 1, SortOrder = 1 }, new() { PageId = 2, SortOrder = 2 }],
         });
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*mesmo pai*");
+            .WithMessage("*mesma pasta*");
+    }
+
+    #endregion
+
+    #region Cover and Width
+
+    [Fact]
+    public async Task CreateAsync_WithCoverGradient_SavesCoverFields()
+    {
+        await using var seedCtx = TestDbContextFactory.Create(nameof(CreateAsync_WithCoverGradient_SavesCoverFields));
+        await SeedBaseEntities(seedCtx);
+
+        await using var svcCtx = TestDbContextFactory.Create(nameof(CreateAsync_WithCoverGradient_SavesCoverFields));
+        var service = new PageService(svcCtx, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
+        var request = new CreatePageRequest
+        {
+            Title = "Cover Test",
+            SpaceId = 1,
+            SortOrder = 0,
+            CoverType = "gradient",
+            CoverValue = "linear-gradient(135deg, #E5892B, #FFE7D0)",
+            CoverPosition = 30,
+            ContentWidth = "wide",
+        };
+
+        var result = await service.CreateAsync(request);
+
+        result.CoverType.Should().Be("gradient");
+        result.CoverValue.Should().Be("linear-gradient(135deg, #E5892B, #FFE7D0)");
+        result.CoverPosition.Should().Be(30);
+        result.ContentWidth.Should().Be("wide");
+    }
+
+    [Fact]
+    public async Task UpdateCoverAsync_ValidRequest_UpdatesCoverFields()
+    {
+        await using var seedCtx = TestDbContextFactory.Create(nameof(UpdateCoverAsync_ValidRequest_UpdatesCoverFields));
+        await SeedBaseEntities(seedCtx);
+        seedCtx.Pages.Add(CreatePage(1));
+        await seedCtx.SaveChangesAsync();
+
+        await using var svcCtx = TestDbContextFactory.Create(nameof(UpdateCoverAsync_ValidRequest_UpdatesCoverFields));
+        var service = new PageService(svcCtx, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        await service.UpdateCoverAsync(1, new UpdatePageCoverRequest
+        {
+            CoverType = "solid",
+            CoverValue = "#FF5733",
+            CoverPosition = 70,
+        });
+
+        await using var assertCtx = TestDbContextFactory.Create(nameof(UpdateCoverAsync_ValidRequest_UpdatesCoverFields));
+        var page = await assertCtx.Pages.FindAsync(1);
+        page!.CoverType.Should().Be("solid");
+        page.CoverValue.Should().Be("#FF5733");
+        page.CoverPosition.Should().Be(70);
+    }
+
+    [Fact]
+    public async Task UpdateWidthAsync_ValidRequest_UpdatesWidth()
+    {
+        await using var seedCtx = TestDbContextFactory.Create(nameof(UpdateWidthAsync_ValidRequest_UpdatesWidth));
+        await SeedBaseEntities(seedCtx);
+        seedCtx.Pages.Add(CreatePage(1));
+        await seedCtx.SaveChangesAsync();
+
+        await using var svcCtx = TestDbContextFactory.Create(nameof(UpdateWidthAsync_ValidRequest_UpdatesWidth));
+        var service = new PageService(svcCtx, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        await service.UpdateWidthAsync(1, new UpdatePageWidthRequest { ContentWidth = "full" });
+
+        await using var assertCtx = TestDbContextFactory.Create(nameof(UpdateWidthAsync_ValidRequest_UpdatesWidth));
+        var page = await assertCtx.Pages.FindAsync(1);
+        page!.ContentWidth.Should().Be("full");
+    }
+
+    [Fact]
+    public async Task UpdateCoverAsync_NullType_RemovesCover()
+    {
+        await using var seedCtx = TestDbContextFactory.Create(nameof(UpdateCoverAsync_NullType_RemovesCover));
+        await SeedBaseEntities(seedCtx);
+        var page = CreatePage(1);
+        page.CoverType = "gradient";
+        page.CoverValue = "linear-gradient(...)";
+        seedCtx.Pages.Add(page);
+        await seedCtx.SaveChangesAsync();
+
+        await using var svcCtx = TestDbContextFactory.Create(nameof(UpdateCoverAsync_NullType_RemovesCover));
+        var service = new PageService(svcCtx, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        await service.UpdateCoverAsync(1, new UpdatePageCoverRequest
+        {
+            CoverType = null,
+            CoverValue = null,
+        });
+
+        await using var assertCtx = TestDbContextFactory.Create(nameof(UpdateCoverAsync_NullType_RemovesCover));
+        var result = await assertCtx.Pages.FindAsync(1);
+        result!.CoverType.Should().BeNull();
+        result.CoverValue.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateAsync_NoCoverFields_DefaultsApplied()
+    {
+        await using var seedCtx = TestDbContextFactory.Create(nameof(CreateAsync_NoCoverFields_DefaultsApplied));
+        await SeedBaseEntities(seedCtx);
+
+        await using var svcCtx = TestDbContextFactory.Create(nameof(CreateAsync_NoCoverFields_DefaultsApplied));
+        var service = new PageService(svcCtx, StubExtractor, StubFileService, StubTranslationService, StubScopeFactory.Object, StubLogger);
+
+        var result = await service.CreateAsync(new CreatePageRequest
+        {
+            Title = "No Cover",
+            SpaceId = 1,
+            SortOrder = 0,
+        });
+
+        result.CoverType.Should().BeNull();
+        result.CoverValue.Should().BeNull();
+        result.CoverPosition.Should().Be(50);
+        result.ContentWidth.Should().Be("normal");
     }
 
     #endregion

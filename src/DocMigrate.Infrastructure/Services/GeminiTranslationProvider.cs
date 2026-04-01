@@ -26,7 +26,8 @@ public class GeminiTranslationProvider(IHttpClientFactory httpClientFactory, ICo
             $"Translate the following text from {fromName} to {toName}. " +
             "Rules: 1) Keep technical terms in English (deploy, branch, pipeline, commit, merge, pull request, release, rollback, sprint, etc). " +
             "2) Maintain the same tone and formality. " +
-            "3) Return ONLY the translated text, no explanations." +
+            "3) Return ONLY the translated text, no explanations. " +
+            "4) CRITICAL: If the text contains segment markers like <<1>>, <<2>>, <<3>> etc, you MUST preserve them EXACTLY as they appear, in the same positions between text segments. Never remove, modify, or reorder these markers." +
             $"\n\nText to translate:\n{text}";
 
         var requestBody = new

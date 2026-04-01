@@ -6,7 +6,7 @@ namespace DocMigrate.Application.Interfaces;
 public interface IPageService
 {
     Task<List<PageListItem>> GetAllAsync(int spaceId);
-    Task<PaginatedResult<PageListItem>> GetAllAsync(int spaceId, int page, int pageSize);
+    Task<PaginatedResult<PageListItem>> GetAllAsync(int spaceId, int page, int pageSize, int? folderId = null);
     Task<PageResponse> GetByIdAsync(int id);
     Task<PageResponse> CreateAsync(CreatePageRequest request, int? userId = null);
     Task<PageResponse> UpdateAsync(int id, UpdatePageRequest request, int? userId = null);
@@ -17,5 +17,7 @@ public interface IPageService
     Task AutosaveContentAsync(int pageId, string lockUserId, string content, int? userId = null);
     Task SetTagsAsync(int pageId, List<int> tagIds);
     Task<List<HeadingDto>> GetHeadingsAsync(int pageId);
-    Task<List<BreadcrumbItem>> GetBreadcrumbsAsync(int pageId);
+    Task UpdateCoverAsync(int id, UpdatePageCoverRequest request);
+    Task UpdateWidthAsync(int id, UpdatePageWidthRequest request);
+    Task<string> UploadCoverAsync(int id, Stream fileStream, string fileName, string contentType);
 }

@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Space> Spaces => Set<Space>();
     public DbSet<Page> Pages => Set<Page>();
+    public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<Template> Templates => Set<Template>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<User> Users => Set<User>();

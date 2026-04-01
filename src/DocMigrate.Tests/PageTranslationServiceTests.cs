@@ -14,8 +14,14 @@ namespace DocMigrate.Tests;
 public class PageTranslationServiceTests
 {
     private static readonly IPlainTextExtractor StubExtractor = new StubPlainTextExtractor();
-    private static readonly ITranslationProvider StubProvider = new NoOpTranslationProvider();
-    private static readonly TiptapTranslationHelper TranslationHelper = new();
+    private static readonly ITranslationProvider StubProvider = new StubTranslationProvider();
+
+    private class StubTranslationProvider : ITranslationProvider
+    {
+        public Task<TranslationResult> TranslateTextAsync(string text, string fromLang, string toLang)
+            => Task.FromResult(new TranslationResult($"[AUTO-{toLang}] {text}", true));
+    }
+    private static readonly TiptapTranslationHelper TranslationHelper = new(NullLogger<TiptapTranslationHelper>.Instance);
 
     private class StubPlainTextExtractor : IPlainTextExtractor
     {

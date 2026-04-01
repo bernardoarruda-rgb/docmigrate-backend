@@ -20,4 +20,5 @@ public class Space : BaseEntity
     public User? UpdatedByUser { get; set; }
 
     public ICollection<Page> Pages { get; set; } = [];
+    public ICollection<Folder> Folders { get; set; } = [];
 }

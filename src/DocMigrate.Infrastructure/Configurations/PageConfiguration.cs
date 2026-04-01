@@ -24,22 +24,27 @@ public class PageConfiguration : IEntityTypeConfiguration<Page>
 
         builder.Property(e => e.Language).HasColumnName("idioma").HasMaxLength(5).HasDefaultValue("pt-BR");
 
+        builder.Property(e => e.CoverType).HasColumnName("tipocapa").HasMaxLength(20);
+        builder.Property(e => e.CoverValue).HasColumnName("valorcapa").HasMaxLength(1000);
+        builder.Property(e => e.CoverPosition).HasColumnName("posicaocapa").HasDefaultValue(50);
+        builder.Property(e => e.CoverAttribution).HasColumnName("atribuicaocapa").HasMaxLength(500);
+        builder.Property(e => e.ContentWidth).HasColumnName("larguraconteudo").HasMaxLength(10).HasDefaultValue("normal");
+
+        builder.HasCheckConstraint("ck_paginas_tipocapa", "tipocapa IN ('gradient', 'solid', 'image', 'unsplash') OR tipocapa IS NULL");
+        builder.HasCheckConstraint("ck_paginas_larguraconteudo", "larguraconteudo IN ('normal', 'wide', 'full')");
+
         builder.Property(e => e.LockedBy).HasColumnName("bloqueadopor").HasMaxLength(255);
         builder.Property(e => e.LockedAt).HasColumnName("bloqueadoem").HasColumnType("timestamptz");
 
         builder.Property(e => e.SpaceId).HasColumnName("espacoid");
 
-        builder.Property(e => e.ParentPageId).HasColumnName("paginapaiid");
-        builder.Property(e => e.Level).HasColumnName("nivel").HasDefaultValue(1);
-
-        builder.HasOne(e => e.ParentPage)
-            .WithMany(e => e.ChildPages)
-            .HasForeignKey(e => e.ParentPageId)
-            .HasConstraintName("fk_paginas_paginapaiid")
+        builder.Property(e => e.FolderId).HasColumnName("pastaid");
+        builder.HasOne(e => e.Folder)
+            .WithMany(f => f.Pages)
+            .HasForeignKey(e => e.FolderId)
+            .HasConstraintName("fk_paginas_pastaid")
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasCheckConstraint("ck_paginas_nivel", "nivel BETWEEN 1 AND 5");
-        builder.HasIndex(e => e.ParentPageId).HasDatabaseName("idx_paginas_paginapaiid");
+        builder.HasIndex(e => e.FolderId).HasDatabaseName("idx_paginas_pastaid");
 
         builder.Property(e => e.CreatedAt).HasColumnName("criadoem").HasColumnType("timestamptz").HasDefaultValueSql("NOW()");
         builder.Property(e => e.UpdatedAt).HasColumnName("atualizadoem").HasColumnType("timestamptz").HasDefaultValueSql("NOW()");

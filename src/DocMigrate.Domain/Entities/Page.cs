@@ -14,6 +14,12 @@ public class Page : BaseEntity
     public string? BackgroundColor { get; set; }
     public string Language { get; set; } = "pt-BR";
 
+    public string? CoverType { get; set; }
+    public string? CoverValue { get; set; }
+    public int CoverPosition { get; set; } = 50;
+    public string? CoverAttribution { get; set; }
+    public string ContentWidth { get; set; } = "normal";
+
     public string? LockedBy { get; set; }
     public DateTime? LockedAt { get; set; }
 
@@ -29,8 +35,6 @@ public class Page : BaseEntity
     public int SpaceId { get; set; }
     public Space Space { get; set; } = null!;
 
-    public int? ParentPageId { get; set; }
-    public Page? ParentPage { get; set; }
-    public ICollection<Page> ChildPages { get; set; } = [];
-    public int Level { get; set; } = 1;
+    public int? FolderId { get; set; }
+    public Folder? Folder { get; set; }
 }

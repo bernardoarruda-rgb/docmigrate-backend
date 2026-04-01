@@ -12,6 +12,7 @@ namespace DocMigrate.Infrastructure.Services;
 public class PageService(
     AppDbContext context,
     IPlainTextExtractor plainTextExtractor,
+    IFileService fileService,
     IPageTranslationService pageTranslationService,
     IServiceScopeFactory serviceScopeFactory,
     ILogger<PageService> logger) : IPageService
@@ -30,24 +31,28 @@ public class PageService(
                 Description = p.Description,
                 SortOrder = p.SortOrder,
                 SpaceId = p.SpaceId,
-                ParentPageId = p.ParentPageId,
-                Level = p.Level,
-                HasChildren = p.ChildPages.Any(c => c.DeletedAt == null),
+                FolderId = p.FolderId,
                 Icon = p.Icon,
                 IconColor = p.IconColor,
                 BackgroundColor = p.BackgroundColor,
                 CreatedAt = p.CreatedAt,
                 Language = p.Language,
+                CoverType = p.CoverType,
+                CoverValue = p.CoverValue,
             })
             .ToListAsync();
     }
 
-    public async Task<PaginatedResult<PageListItem>> GetAllAsync(int spaceId, int page, int pageSize)
+    public async Task<PaginatedResult<PageListItem>> GetAllAsync(int spaceId, int page, int pageSize, int? folderId = null)
     {
         var query = context.Pages
             .AsNoTracking()
-            .Where(p => p.SpaceId == spaceId && p.DeletedAt == null)
-            .OrderBy(p => p.SortOrder);
+            .Where(p => p.SpaceId == spaceId && p.DeletedAt == null);
+
+        if (folderId.HasValue)
+            query = query.Where(p => p.FolderId == folderId.Value);
+
+        query = query.OrderBy(p => p.SortOrder);
 
         var totalCount = await query.CountAsync();
 
@@ -61,14 +66,14 @@ public class PageService(
                 Description = p.Description,
                 SortOrder = p.SortOrder,
                 SpaceId = p.SpaceId,
-                ParentPageId = p.ParentPageId,
-                Level = p.Level,
-                HasChildren = p.ChildPages.Any(c => c.DeletedAt == null),
+                FolderId = p.FolderId,
                 Icon = p.Icon,
                 IconColor = p.IconColor,
                 BackgroundColor = p.BackgroundColor,
                 CreatedAt = p.CreatedAt,
                 Language = p.Language,
+                CoverType = p.CoverType,
+                CoverValue = p.CoverValue,
             })
             .ToListAsync();
 
@@ -92,7 +97,8 @@ public class PageService(
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
         var response = MapToResponse(entity);
-        response.Breadcrumbs = await GetBreadcrumbsAsync(id);
+        if (entity.FolderId.HasValue)
+            response.FolderBreadcrumbs = await GetFolderBreadcrumbsAsync(entity.FolderId.Value);
         return response;
     }
 
@@ -105,22 +111,16 @@ public class PageService(
         if (!spaceExists)
             throw new KeyNotFoundException("Espaco nao encontrado");
 
-        int level = 1;
-        if (request.ParentPageId.HasValue)
+        if (request.FolderId.HasValue)
         {
-            var parent = await context.Pages
-                .Where(p => p.DeletedAt == null && p.Id == request.ParentPageId.Value)
-                .Select(p => new { p.SpaceId, p.Level })
+            var folder = await context.Folders
+                .Where(f => f.DeletedAt == null && f.Id == request.FolderId.Value)
+                .Select(f => new { f.SpaceId })
                 .FirstOrDefaultAsync()
-                ?? throw new KeyNotFoundException("Pagina pai nao encontrada ou foi desativada.");
+                ?? throw new KeyNotFoundException("Pasta nao encontrada ou foi desativada.");
 
-            if (parent.SpaceId != request.SpaceId)
-                throw new InvalidOperationException("Pagina pai deve pertencer ao mesmo espaco.");
-
-            if (parent.Level >= 5)
-                throw new InvalidOperationException("Profundidade maxima (5 niveis) atingida.");
-
-            level = parent.Level + 1;
+            if (folder.SpaceId != request.SpaceId)
+                throw new InvalidOperationException("Pasta deve pertencer ao mesmo espaco.");
         }
 
         var entity = new Page
@@ -130,12 +130,16 @@ public class PageService(
             Content = request.Content,
             SortOrder = request.SortOrder,
             SpaceId = request.SpaceId,
-            ParentPageId = request.ParentPageId,
-            Level = level,
+            FolderId = request.FolderId,
             Icon = request.Icon,
             IconColor = request.IconColor,
             BackgroundColor = request.BackgroundColor,
             Language = request.Language ?? "pt-BR",
+            CoverType = request.CoverType,
+            CoverValue = request.CoverValue,
+            CoverPosition = request.CoverPosition ?? 50,
+            CoverAttribution = request.CoverAttribution,
+            ContentWidth = request.ContentWidth ?? "normal",
         };
 
         entity.PlainText = plainTextExtractor.Extract(entity.Content);
@@ -149,15 +153,6 @@ public class PageService(
         await context.Entry(entity).Reference(e => e.CreatedByUser).LoadAsync();
         await context.Entry(entity).Reference(e => e.UpdatedByUser).LoadAsync();
 
-        // Fire-and-forget: auto-translate new page
-        _ = Task.Run(async () =>
-        {
-            using var scope = serviceScopeFactory.CreateScope();
-            var translationService = scope.ServiceProvider.GetRequiredService<IPageTranslationService>();
-            try { await translationService.AutoTranslateAsync(entity.Id, userId); }
-            catch (Exception ex) { logger.LogError(ex, "Auto-translate failed for page {PageId}", entity.Id); }
-        });
-
         return MapToResponse(entity);
     }
 
@@ -170,42 +165,22 @@ public class PageService(
             .FirstOrDefaultAsync(p => p.Id == id)
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
-        // Handle parent change (move page)
-        if (request.ParentPageId != entity.ParentPageId)
+        // Handle folder change (move page)
+        if (request.FolderId != entity.FolderId)
         {
-            if (request.ParentPageId.HasValue)
+            if (request.FolderId.HasValue)
             {
-                if (request.ParentPageId.Value == id)
-                    throw new InvalidOperationException("Uma pagina nao pode ser pai de si mesma.");
-
-                var newParent = await context.Pages
-                    .Where(p => p.DeletedAt == null && p.Id == request.ParentPageId.Value)
-                    .Select(p => new { p.SpaceId, p.Level })
+                var newFolder = await context.Folders
+                    .Where(f => f.DeletedAt == null && f.Id == request.FolderId.Value)
+                    .Select(f => new { f.SpaceId })
                     .FirstOrDefaultAsync()
-                    ?? throw new KeyNotFoundException("Pagina pai nao encontrada ou foi desativada.");
+                    ?? throw new KeyNotFoundException("Pasta nao encontrada ou foi desativada.");
 
-                if (newParent.SpaceId != entity.SpaceId)
-                    throw new InvalidOperationException("Pagina pai deve pertencer ao mesmo espaco.");
-
-                if (newParent.Level >= 5)
-                    throw new InvalidOperationException("Profundidade maxima (5 niveis) atingida.");
-
-                // Cycle detection: ensure new parent is not a descendant
-                if (await IsDescendantAsync(id, request.ParentPageId.Value))
-                    throw new InvalidOperationException("Nao e possivel mover a pagina para um descendente (ciclo detectado).");
-
-                entity.ParentPageId = request.ParentPageId;
-                entity.Level = newParent.Level + 1;
-
-                // Recalculate descendant levels
-                await RecalculateDescendantLevelsAsync(entity.Id, entity.Level);
+                if (newFolder.SpaceId != entity.SpaceId)
+                    throw new InvalidOperationException("Pasta deve pertencer ao mesmo espaco.");
             }
-            else
-            {
-                entity.ParentPageId = null;
-                entity.Level = 1;
-                await RecalculateDescendantLevelsAsync(entity.Id, 1);
-            }
+
+            entity.FolderId = request.FolderId;
         }
 
         entity.Title = request.Title;
@@ -219,21 +194,17 @@ public class PageService(
         entity.Icon = request.Icon;
         entity.IconColor = request.IconColor;
         entity.BackgroundColor = request.BackgroundColor;
+        entity.CoverType = request.CoverType;
+        entity.CoverValue = request.CoverValue;
+        if (request.CoverPosition.HasValue) entity.CoverPosition = request.CoverPosition.Value;
+        entity.CoverAttribution = request.CoverAttribution;
+        if (request.ContentWidth is not null) entity.ContentWidth = request.ContentWidth;
         if (request.Language is not null) entity.Language = request.Language;
         entity.UpdatedByUserId = userId;
 
         await context.SaveChangesAsync();
 
         await pageTranslationService.MarkOutdatedAsync(id);
-
-        // Fire-and-forget: auto-translate after metadata update
-        _ = Task.Run(async () =>
-        {
-            using var scope = serviceScopeFactory.CreateScope();
-            var translationService = scope.ServiceProvider.GetRequiredService<IPageTranslationService>();
-            try { await translationService.AutoTranslateAsync(id, userId); }
-            catch (Exception ex) { logger.LogError(ex, "Auto-translate failed for page {PageId}", id); }
-        });
 
         await context.Entry(entity).Reference(e => e.UpdatedByUser).LoadAsync();
 
@@ -247,26 +218,11 @@ public class PageService(
             .FirstOrDefaultAsync(p => p.Id == id)
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
-        var now = DateTime.UtcNow;
-        entity.DeletedAt = now;
-
-        // Cascade soft-delete all descendants
-        var descendantIds = await GetDescendantIdsAsync(id);
-        if (descendantIds.Count > 0)
-        {
-            var descendants = await context.Pages
-                .Where(p => descendantIds.Contains(p.Id) && p.DeletedAt == null)
-                .ToListAsync();
-            foreach (var desc in descendants)
-                desc.DeletedAt = now;
-        }
+        entity.DeletedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
 
-        // Soft delete translations for this page and all descendants
         await pageTranslationService.SoftDeleteByPageAsync(id);
-        foreach (var descId in descendantIds)
-            await pageTranslationService.SoftDeleteByPageAsync(descId);
     }
 
     public async Task ReorderAsync(int spaceId, ReorderPagesRequest request)
@@ -287,10 +243,10 @@ public class PageService(
         if (pages.Count != pageIds.Count)
             throw new ArgumentException("Uma ou mais paginas nao pertencem a este espaco ou nao existem");
 
-        // Validate all pages share the same parent (reorder only within siblings)
-        var parentIds = pages.Select(p => p.ParentPageId).Distinct().ToList();
-        if (parentIds.Count > 1)
-            throw new ArgumentException("Todas as paginas devem pertencer ao mesmo pai para reordenar.");
+        // Validate all pages share the same folder (reorder only within same folder)
+        var folderIds = pages.Select(p => p.FolderId).Distinct().ToList();
+        if (folderIds.Count > 1)
+            throw new ArgumentException("Todas as paginas devem pertencer a mesma pasta para reordenar.");
 
         foreach (var item in request.Items)
         {
@@ -360,13 +316,13 @@ public class PageService(
         entity.LockedAt = null;
         await context.SaveChangesAsync();
 
-        // Fire-and-forget: auto-translate after editing session
+        // Mark existing translations as outdated (no auto-translate — user triggers manually)
         _ = Task.Run(async () =>
         {
             using var scope = serviceScopeFactory.CreateScope();
             var translationService = scope.ServiceProvider.GetRequiredService<IPageTranslationService>();
-            try { await translationService.AutoTranslateAsync(pageId); }
-            catch (Exception ex) { logger.LogError(ex, "Auto-translate failed for page {PageId}", pageId); }
+            try { await translationService.MarkOutdatedAsync(pageId); }
+            catch (Exception ex) { logger.LogError(ex, "MarkOutdated failed for page {PageId}", pageId); }
         });
 
         return true;
@@ -409,86 +365,78 @@ public class PageService(
         await context.SaveChangesAsync();
     }
 
-    private async Task<bool> IsDescendantAsync(int ancestorId, int potentialDescendantId)
+    public async Task UpdateCoverAsync(int id, UpdatePageCoverRequest request)
     {
-        var ancestorChain = await context.Pages
-            .AsNoTracking()
+        var entity = await context.Pages
             .Where(p => p.DeletedAt == null)
-            .Select(p => new { p.Id, p.ParentPageId })
-            .ToListAsync();
+            .FirstOrDefaultAsync(p => p.Id == id)
+            ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
-        var lookup = ancestorChain.ToDictionary(p => p.Id, p => p.ParentPageId);
-        var currentId = (int?)potentialDescendantId;
+        entity.CoverType = request.CoverType;
+        entity.CoverValue = request.CoverValue;
+        if (request.CoverPosition.HasValue) entity.CoverPosition = request.CoverPosition.Value;
+        entity.CoverAttribution = request.CoverAttribution;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+    }
+
+    public async Task UpdateWidthAsync(int id, UpdatePageWidthRequest request)
+    {
+        var entity = await context.Pages
+            .Where(p => p.DeletedAt == null)
+            .FirstOrDefaultAsync(p => p.Id == id)
+            ?? throw new KeyNotFoundException("Pagina nao encontrada");
+
+        entity.ContentWidth = request.ContentWidth;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+    }
+
+    public async Task<string> UploadCoverAsync(int id, Stream fileStream, string fileName, string contentType)
+    {
+        var entity = await context.Pages
+            .Where(p => p.DeletedAt == null)
+            .FirstOrDefaultAsync(p => p.Id == id)
+            ?? throw new KeyNotFoundException("Pagina nao encontrada");
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var objectName = $"covers/page-{id}-{Guid.NewGuid()}{ext}";
+        var url = await fileService.UploadAsync(fileStream, objectName, contentType);
+
+        entity.CoverType = "image";
+        entity.CoverValue = url;
+        entity.CoverAttribution = null;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+        return url;
+    }
+
+    private async Task<List<BreadcrumbItem>> GetFolderBreadcrumbsAsync(int folderId)
+    {
+        var breadcrumbs = new List<BreadcrumbItem>();
+        var currentId = (int?)folderId;
         var visited = new HashSet<int>();
 
         while (currentId.HasValue)
         {
-            if (!visited.Add(currentId.Value)) return false;
-            if (currentId.Value == ancestorId) return true;
-            lookup.TryGetValue(currentId.Value, out currentId);
+            if (!visited.Add(currentId.Value)) break;
+
+            var folder = await context.Folders
+                .AsNoTracking()
+                .Where(f => f.Id == currentId.Value && f.DeletedAt == null)
+                .Select(f => new { f.Id, f.Title, f.ParentFolderId })
+                .FirstOrDefaultAsync();
+
+            if (folder == null) break;
+
+            breadcrumbs.Insert(0, new BreadcrumbItem { Id = folder.Id, Title = folder.Title });
+            currentId = folder.ParentFolderId;
         }
 
-        return false;
-    }
-
-    private async Task<List<int>> GetDescendantIdsAsync(int pageId)
-    {
-        var allPages = await context.Pages
-            .AsNoTracking()
-            .Where(p => p.DeletedAt == null)
-            .Select(p => new { p.Id, p.ParentPageId })
-            .ToListAsync();
-
-        var childrenLookup = allPages
-            .Where(p => p.ParentPageId.HasValue)
-            .GroupBy(p => p.ParentPageId!.Value)
-            .ToDictionary(g => g.Key, g => g.Select(p => p.Id).ToList());
-
-        var descendants = new List<int>();
-        var queue = new Queue<int>();
-        queue.Enqueue(pageId);
-
-        while (queue.Count > 0)
-        {
-            var currentId = queue.Dequeue();
-            if (!childrenLookup.TryGetValue(currentId, out var childIds)) continue;
-            foreach (var childId in childIds)
-            {
-                descendants.Add(childId);
-                queue.Enqueue(childId);
-            }
-        }
-
-        return descendants;
-    }
-
-    private async Task RecalculateDescendantLevelsAsync(int pageId, int newParentLevel)
-    {
-        var descendantIds = await GetDescendantIdsAsync(pageId);
-        if (descendantIds.Count == 0) return;
-
-        var descendants = await context.Pages
-            .Where(p => descendantIds.Contains(p.Id))
-            .ToListAsync();
-
-        var childrenLookup = descendants
-            .Where(p => p.ParentPageId.HasValue)
-            .GroupBy(p => p.ParentPageId!.Value)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var queue = new Queue<(int Id, int Level)>();
-        queue.Enqueue((pageId, newParentLevel));
-
-        while (queue.Count > 0)
-        {
-            var (currentId, currentLevel) = queue.Dequeue();
-            if (!childrenLookup.TryGetValue(currentId, out var children)) continue;
-            foreach (var child in children)
-            {
-                child.Level = currentLevel + 1;
-                queue.Enqueue((child.Id, child.Level));
-            }
-        }
+        return breadcrumbs;
     }
 
     private static PageResponse MapToResponse(Page entity) => new()
@@ -499,8 +447,7 @@ public class PageService(
         Content = entity.Content,
         SortOrder = entity.SortOrder,
         SpaceId = entity.SpaceId,
-        ParentPageId = entity.ParentPageId,
-        Level = entity.Level,
+        FolderId = entity.FolderId,
         Icon = entity.Icon,
         IconColor = entity.IconColor,
         BackgroundColor = entity.BackgroundColor,
@@ -511,6 +458,11 @@ public class PageService(
         CreatedByName = entity.CreatedByUser?.Name,
         UpdatedByName = entity.UpdatedByUser?.Name,
         Language = entity.Language,
+        CoverType = entity.CoverType,
+        CoverValue = entity.CoverValue,
+        CoverPosition = entity.CoverPosition,
+        CoverAttribution = entity.CoverAttribution,
+        ContentWidth = entity.ContentWidth,
     };
 
     public async Task<List<HeadingDto>> GetHeadingsAsync(int pageId)
@@ -522,31 +474,6 @@ public class PageService(
             ?? throw new KeyNotFoundException("Pagina nao encontrada");
 
         return ExtractHeadings(entity.Content);
-    }
-
-    public async Task<List<BreadcrumbItem>> GetBreadcrumbsAsync(int pageId)
-    {
-        var breadcrumbs = new List<BreadcrumbItem>();
-        var currentId = (int?)pageId;
-        var visited = new HashSet<int>();
-
-        while (currentId.HasValue)
-        {
-            if (!visited.Add(currentId.Value)) break;
-
-            var page = await context.Pages
-                .AsNoTracking()
-                .Where(p => p.Id == currentId.Value && p.DeletedAt == null)
-                .Select(p => new { p.Id, p.Title, p.ParentPageId })
-                .FirstOrDefaultAsync();
-
-            if (page == null) break;
-
-            breadcrumbs.Insert(0, new BreadcrumbItem { Id = page.Id, Title = page.Title });
-            currentId = page.ParentPageId;
-        }
-
-        return breadcrumbs;
     }
 
     private static List<HeadingDto> ExtractHeadings(string? tiptapJson)

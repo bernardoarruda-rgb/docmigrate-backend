@@ -10,5 +10,10 @@ public class UpdatePageRequest
     public string? IconColor { get; set; }
     public string? BackgroundColor { get; set; }
     public string? Language { get; set; }
-    public int? ParentPageId { get; set; }
+    public int? FolderId { get; set; }
+    public string? CoverType { get; set; }
+    public string? CoverValue { get; set; }
+    public int? CoverPosition { get; set; }
+    public string? CoverAttribution { get; set; }
+    public string? ContentWidth { get; set; }
 }

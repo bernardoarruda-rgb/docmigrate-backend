@@ -3,6 +3,7 @@ using System;
 using DocMigrate.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -12,9 +13,11 @@ using NpgsqlTypes;
 namespace DocMigrate.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260324201443_AddPageVisualCustomization")]
+    partial class AddPageVisualCustomization
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,86 +25,6 @@ namespace DocMigrate.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("DocMigrate.Domain.Entities.Folder", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("pastasid");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("criadoem")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("desativadoem");
-
-                    b.Property<string>("Icon")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("icone");
-
-                    b.Property<string>("IconColor")
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)")
-                        .HasColumnName("coricone");
-
-                    b.Property<int>("Level")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("nivel");
-
-                    b.Property<int?>("ParentFolderId")
-                        .HasColumnType("integer")
-                        .HasColumnName("pasta_paiid");
-
-                    b.Property<int>("SortOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("ordem");
-
-                    b.Property<int>("SpaceId")
-                        .HasColumnType("integer")
-                        .HasColumnName("espacoid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("titulo");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("atualizadoem")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.HasKey("Id")
-                        .HasName("pk_pastas");
-
-                    b.HasIndex("DeletedAt")
-                        .HasDatabaseName("idx_pastas_desativadoem")
-                        .HasFilter("desativadoem IS NULL");
-
-                    b.HasIndex("ParentFolderId")
-                        .HasDatabaseName("idx_pastas_pasta_paiid");
-
-                    b.HasIndex("SpaceId")
-                        .HasDatabaseName("idx_pastas_espacoid");
-
-                    b.ToTable("pastas", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_pastas_nivel", "nivel BETWEEN 1 AND 5");
-                        });
-                });
 
             modelBuilder.Entity("DocMigrate.Domain.Entities.Page", b =>
                 {
@@ -169,10 +92,6 @@ namespace DocMigrate.Infrastructure.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("descricao");
 
-                    b.Property<int?>("FolderId")
-                        .HasColumnType("integer")
-                        .HasColumnName("pastaid");
-
                     b.Property<string>("Icon")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -191,6 +110,12 @@ namespace DocMigrate.Infrastructure.Migrations
                         .HasDefaultValue("pt-BR")
                         .HasColumnName("idioma");
 
+                    b.Property<int>("Level")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("nivel");
+
                     b.Property<DateTime?>("LockedAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("bloqueadoem");
@@ -199,6 +124,10 @@ namespace DocMigrate.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("bloqueadopor");
+
+                    b.Property<int?>("ParentPageId")
+                        .HasColumnType("integer")
+                        .HasColumnName("paginapaiid");
 
                     b.Property<string>("PlainText")
                         .HasColumnType("text")
@@ -245,8 +174,8 @@ namespace DocMigrate.Infrastructure.Migrations
                         .HasDatabaseName("idx_paginas_desativadoem")
                         .HasFilter("desativadoem IS NULL");
 
-                    b.HasIndex("FolderId")
-                        .HasDatabaseName("idx_paginas_pastaid");
+                    b.HasIndex("ParentPageId")
+                        .HasDatabaseName("idx_paginas_paginapaiid");
 
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("idx_paginas_busca");
@@ -260,6 +189,8 @@ namespace DocMigrate.Infrastructure.Migrations
                     b.ToTable("paginas", null, t =>
                         {
                             t.HasCheckConstraint("ck_paginas_larguraconteudo", "larguraconteudo IN ('normal', 'wide', 'full')");
+
+                            t.HasCheckConstraint("ck_paginas_nivel", "nivel BETWEEN 1 AND 5");
 
                             t.HasCheckConstraint("ck_paginas_tipocapa", "tipocapa IN ('gradient', 'solid', 'image', 'unsplash') OR tipocapa IS NULL");
                         });
@@ -935,26 +866,6 @@ namespace DocMigrate.Infrastructure.Migrations
                     b.ToTable("paginas_tags", (string)null);
                 });
 
-            modelBuilder.Entity("DocMigrate.Domain.Entities.Folder", b =>
-                {
-                    b.HasOne("DocMigrate.Domain.Entities.Folder", "ParentFolder")
-                        .WithMany("ChildFolders")
-                        .HasForeignKey("ParentFolderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_pastas_pasta_paiid");
-
-                    b.HasOne("DocMigrate.Domain.Entities.Space", "Space")
-                        .WithMany("Folders")
-                        .HasForeignKey("SpaceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_pastas_espacoid");
-
-                    b.Navigation("ParentFolder");
-
-                    b.Navigation("Space");
-                });
-
             modelBuilder.Entity("DocMigrate.Domain.Entities.Page", b =>
                 {
                     b.HasOne("DocMigrate.Domain.Entities.User", "CreatedByUser")
@@ -963,11 +874,11 @@ namespace DocMigrate.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_paginas_criadoporusuarioid");
 
-                    b.HasOne("DocMigrate.Domain.Entities.Folder", "Folder")
-                        .WithMany("Pages")
-                        .HasForeignKey("FolderId")
+                    b.HasOne("DocMigrate.Domain.Entities.Page", "ParentPage")
+                        .WithMany("ChildPages")
+                        .HasForeignKey("ParentPageId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_paginas_pastaid");
+                        .HasConstraintName("fk_paginas_paginapaiid");
 
                     b.HasOne("DocMigrate.Domain.Entities.Space", "Space")
                         .WithMany("Pages")
@@ -984,7 +895,7 @@ namespace DocMigrate.Infrastructure.Migrations
 
                     b.Navigation("CreatedByUser");
 
-                    b.Navigation("Folder");
+                    b.Navigation("ParentPage");
 
                     b.Navigation("Space");
 
@@ -1185,11 +1096,9 @@ namespace DocMigrate.Infrastructure.Migrations
                         .HasConstraintName("fk_paginas_tags_tagid");
                 });
 
-            modelBuilder.Entity("DocMigrate.Domain.Entities.Folder", b =>
+            modelBuilder.Entity("DocMigrate.Domain.Entities.Page", b =>
                 {
-                    b.Navigation("ChildFolders");
-
-                    b.Navigation("Pages");
+                    b.Navigation("ChildPages");
                 });
 
             modelBuilder.Entity("DocMigrate.Domain.Entities.PageComment", b =>
@@ -1199,8 +1108,6 @@ namespace DocMigrate.Infrastructure.Migrations
 
             modelBuilder.Entity("DocMigrate.Domain.Entities.Space", b =>
                 {
-                    b.Navigation("Folders");
-
                     b.Navigation("Pages");
                 });
 
